@@ -14,6 +14,8 @@ let gameInterval;
 let obstacleInterval;
 let cloudInterval;
 let scoreInterval;
+let activeIntervals = []; // Track all active movement intervals
+let activeTimeouts = []; // Track all active generation timeouts
 
 // Jump physics
 let position = 0;
@@ -77,24 +79,31 @@ function generateObstacle() {
     
     // Move obstacle
     let obstaclePosition = 600;
-    
+
     const moveObstacle = setInterval(() => {
         if (obstaclePosition < -50) {
             clearInterval(moveObstacle);
+            // Remove from tracking array
+            activeIntervals = activeIntervals.filter(id => id !== moveObstacle);
             gameContainer.removeChild(obstacle);
         } else if (
-            obstaclePosition > 0 && 
-            obstaclePosition < 60 && 
+            obstaclePosition > 0 &&
+            obstaclePosition < 60 &&
             position < (isBird ? 90 : 40)
         ) {
             // Collision detection
             clearInterval(moveObstacle);
+            // Remove from tracking array
+            activeIntervals = activeIntervals.filter(id => id !== moveObstacle);
             gameOver();
         } else {
             obstaclePosition -= animationSpeed;
             obstacle.style.left = obstaclePosition + 'px';
         }
     }, 20);
+
+    // Track this interval for cleanup
+    activeIntervals.push(moveObstacle);
 }
 
 // Generate clouds
@@ -112,16 +121,21 @@ function generateCloud() {
     gameContainer.appendChild(cloud);
     
     let cloudPosition = 600;
-    
+
     const moveCloud = setInterval(() => {
         if (cloudPosition < -50) {
             clearInterval(moveCloud);
+            // Remove from tracking array
+            activeIntervals = activeIntervals.filter(id => id !== moveCloud);
             gameContainer.removeChild(cloud);
         } else {
             cloudPosition -= 1; // Clouds move slower than obstacles
             cloud.style.left = cloudPosition + 'px';
         }
     }, 20);
+
+    // Track this interval for cleanup
+    activeIntervals.push(moveCloud);
 }
 
 // Game over function
@@ -131,17 +145,25 @@ function gameOver() {
     clearInterval(obstacleInterval);
     clearInterval(cloudInterval);
     clearInterval(scoreInterval);
-    
+
+    // Clear all active movement intervals
+    activeIntervals.forEach(intervalId => clearInterval(intervalId));
+    activeIntervals = [];
+
+    // Clear all active generation timeouts
+    activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    activeTimeouts = [];
+
     // Show game over message
     gameOverDisplay.classList.remove('hidden');
-    
+
     // Update high score if needed
     if (score > highScore) {
         highScore = score;
         localStorage.setItem('highScore', highScore);
         highScoreDisplay.textContent = `HI: ${highScore}`;
     }
-    
+
     // Remove all obstacles
     document.querySelectorAll('.cactus, .bird').forEach(obstacle => {
         gameContainer.removeChild(obstacle);
@@ -150,38 +172,50 @@ function gameOver() {
 
 // Start game function
 function startGame() {
+    // Clear all existing intervals and timeouts first
+    clearInterval(gameInterval);
+    clearInterval(obstacleInterval);
+    clearInterval(cloudInterval);
+    clearInterval(scoreInterval);
+    activeIntervals.forEach(intervalId => clearInterval(intervalId));
+    activeIntervals = [];
+    activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    activeTimeouts = [];
+
     isGameOver = false;
     score = 0;
     position = 0;
     animationSpeed = 3;
-    
+
     // Clear any existing obstacles
     document.querySelectorAll('.cactus, .bird, .cloud').forEach(element => {
         gameContainer.removeChild(element);
     });
-    
+
     // Reset displays
     scoreDisplay.textContent = '0';
     gameOverDisplay.classList.add('hidden');
-    
+
     // Generate obstacles at random intervals
     obstacleInterval = setInterval(() => {
-        // Increase the frequency as score increases
-        const randomTime = Math.floor(Math.random() * (2000 - score/100)) + 1000;
-        setTimeout(generateObstacle, randomTime);
+        // Increase the frequency as score increases, prevent negative values
+        const randomTime = Math.floor(Math.random() * Math.max(500, 2000 - score/100)) + 1000;
+        const timeoutId = setTimeout(generateObstacle, randomTime);
+        activeTimeouts.push(timeoutId);
     }, 2000);
-    
+
     // Generate clouds at random intervals
     cloudInterval = setInterval(() => {
         const randomTime = Math.floor(Math.random() * 3000) + 2000;
-        setTimeout(generateCloud, randomTime);
+        const timeoutId = setTimeout(generateCloud, randomTime);
+        activeTimeouts.push(timeoutId);
     }, 3000);
-    
+
     // Increase score
     scoreInterval = setInterval(() => {
         score += 10;
         scoreDisplay.textContent = score;
-        
+
         // Increase animation speed every 500 points
         if (score % 500 === 0 && animationSpeed < 8) {
             animationSpeed += 0.5;
@@ -191,24 +225,30 @@ function startGame() {
 
 // Event listeners
 document.addEventListener('keydown', (event) => {
-    if ((event.code === 'Space' || event.key === 'ArrowUp' || event.code === 'KeyW') && !isJumping) {
+    // Jump only when game is running (not game over) and not already jumping
+    if ((event.code === 'Space' || event.key === 'ArrowUp' || event.code === 'KeyW') && !isJumping && !isGameOver) {
         jump();
     }
-    
+
     // Restart on Enter when game over
-    if ((event.code === 'Enter' || event.code === 'Space') && isGameOver) {
+    if (event.code === 'Enter' && isGameOver) {
+        startGame();
+    }
+
+    // Restart on Space when game over (separate from jump)
+    if (event.code === 'Space' && isGameOver) {
         startGame();
     }
 });
 
 // Touch support for mobile
 document.addEventListener('touchstart', () => {
-    if (!isJumping) {
-        jump();
-    }
-    
     if (isGameOver) {
+        // Restart game when tapped during game over
         startGame();
+    } else if (!isJumping) {
+        // Jump only when game is running
+        jump();
     }
 });
 

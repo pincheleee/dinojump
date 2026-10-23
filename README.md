@@ -2,6 +2,14 @@
 
 A browser-based recreation of the famous Chrome dinosaur game that appears when you're offline.
 
+## Project Status
+
+- Status: archived
+- Last major update: 2026-03-07
+- Current focus: none; finished game
+- Run: open `index.html`
+- Next step: none planned
+
 ## How to Play
 
 1. Open `index.html` in your web browser.
